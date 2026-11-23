@@ -50,7 +50,7 @@ table.r td.c,table.r th.c{text-align:center}
 </style>
 </head>
 <body>
-<header><h1>Learner's Performance Report Portal</h1><p>Calinan National High School · Division of Davao City</p></header>
+<header><a href="admin.html" style="float:right;color:#fff;font-size:12px">Admin page</a><h1>Learner's Performance Report Portal</h1><p>Calinan National High School · Division of Davao City</p></header>
 <main>
 <div class="tabs noprint">
  <button id="tP" class="on" onclick="tab('P')">Parent / Learner</button>
@@ -71,12 +71,29 @@ table.r td.c,table.r th.c{text-align:center}
 <section id="T" class="hide">
  <div class="card">
   <div class="row">
-   <div><label>Teacher Key</label><input id="tk" type="password"></div>
-   <div style="align-self:end"><button class="btn pri" onclick="listL()">Unlock / Load Learners</button></div>
-   <div><label>Learners</label><select id="ls" onchange="loadL(this.value)"><option value="">— New learner —</option></select></div>
+   <div><label>Email / Username</label><input id="tu" autocomplete="username"></div>
+   <div><label>Password</label><input id="tp" type="password" autocomplete="current-password"></div>
+   <div style="align-self:end"><button class="btn pri" onclick="listL()">Log in</button></div>
+   <div><label>Learner</label><select id="ls" onchange="loadL(this.value)"></select></div>
   </div>
   <div id="tm" class="msg"></div>
+  <div id="cl" class="scroll"></div>
  </div>
+ <details class="card" id="rg"><summary style="cursor:pointer;font-weight:bold">New teacher? Create an account</summary>
+  <div class="row" style="margin-top:10px">
+   <div><label>Full Name</label><input id="rn"></div>
+   <div><label>Email (this will be your username)</label><input id="ru" type="email" autocomplete="email" placeholder="name@gmail.com"></div>
+   <div><label>Password (min 6)</label><input id="rp" type="password" autocomplete="new-password"></div>
+   <div><label>I am a</label><select id="rr" onchange="rrole()"><option value="teacher">Subject teacher</option><option value="adviser">Adviser</option></select></div>
+   <div id="rjw"><label>Subject(s) you teach (e.g. Science, Mathematics)</label><input id="rj"></div>
+   <div id="rsw" class="hide"><label>Advisory Section</label><input id="rs"></div>
+   <div><label>Registration Code (from the admin)</label><input id="rc" type="password"></div>
+  </div>
+  <button class="btn pri" onclick="register()">Create Account</button>
+  <div id="rm" class="msg">New accounts must be approved by the admin before you can log in.</div>
+ </details>
+ <div class="card hide" id="pwrap"><b>Pending teacher accounts</b><div id="pend" class="scroll"></div></div>
+ <div class="card hide" id="as"></div>
  <div id="ed" class="hide">
   <div class="card">
    <div class="row">
@@ -106,7 +123,7 @@ table.r td.c,table.r th.c{text-align:center}
   <div class="card">
    <button class="btn pri" onclick="save()">Save to Sheet</button>
    <button class="btn" onclick="preview()">Preview Report</button>
-   <button class="btn" onclick="del()">Delete Learner</button>
+   <button class="btn" id="bd" onclick="del()">Delete Learner</button>
    <div id="sm" class="msg"></div>
   </div>
  </div>
@@ -120,7 +137,7 @@ table.r td.c,table.r th.c{text-align:center}
 
 <script>
 // Apps Script Web App URL:
-const API = 'https://script.google.com/macros/s/AKfycbyj-hWwcT8GhmsVfIPnCOkoLZs8gb1mVxqXowCX3i5bBUkSpOG69O5NZZxT-xx9mnthRQ/exec';
+const API = 'https://script.google.com/macros/s/AKfycbwu0FHxvzmGlG4u6a2-pX4W3NLCP-k-4Rz_WCFTdpjUkVUnBYEF1pb9IhLKPRde5BNinA/exec';
 
 const SUBJ = ['Filipino','English','Mathematics','Science','Araling Panlipunan','Values Education','Technology and Livelihood Education (TLE)','Information and Communication Technology (ICT)','MAPEH','Music and Arts','Physical Education and Health'];
 const INPUT_SUBJ = SUBJ.filter(s => s !== 'MAPEH');
@@ -229,20 +246,87 @@ function buildForms(d) {
 function fillLearner(L) {
   ['LRN', 'Name', 'Age', 'Sex', 'Section', 'Grade', 'SchoolYear', 'Code', 'Adviser', 'Principal', 'C1', 'C2', 'C3'].forEach(k => { if ($('f_' + k)) $('f_' + k).value = L[k] ?? ''; });
 }
-async function listL() {
-  $('tm').className = 'msg'; $('tm').textContent = 'Loading…';
-  try {
-    const d = await api({ action: 'list', key: $('tk').value });
-    if (!d.ok) { $('tm').className = 'msg err'; $('tm').textContent = d.error; return; }
-    $('ls').innerHTML = '<option value="">— New learner —</option>' + d.learners.map(l => `<option value="${esc(l.LRN)}">${esc(l.Name)} (${esc(l.Section)})</option>`).join('');
-    $('tm').textContent = d.learners.length + ' learner(s) loaded.'; $('ed').classList.remove('hide'); buildForms(); fillLearner({ Grade: 7, SchoolYear: '2026–2027', Sex: 'Female' });
-  } catch (e) { $('tm').className = 'msg err'; $('tm').textContent = 'Could not connect. Check the API URL.'; }
+function rrole(){const a=$('rr').value==='adviser';$('rsw').classList.toggle('hide',!a);$('rjw').classList.toggle('hide',a);}
+async function register(){
+ const v=id=>$(id).value.trim();
+ $('rm').className='msg';$('rm').textContent='Submitting…';
+ try{
+  const x=await post({action:'register',name:v('rn'),username:v('ru').toLowerCase(),password:$('rp').value,role:$('rr').value,section:v('rs'),subjects:v('rj'),regCode:$('rc').value.trim()});
+  $('rm').className=x.ok?'msg':'msg err';
+  $('rm').textContent=x.ok?'Account request sent ✔ Please wait for the admin to approve it, then log in above.':x.error;
+ }catch(e){$('rm').className='msg err';$('rm').textContent='Could not connect. Check the API URL.';}
 }
-async function loadL(lrn) {
-  if (!lrn) { buildForms(); fillLearner({ Grade: 7, SchoolYear: '2026–2027', Sex: 'Female' }); return; }
-  const d = await api({ action: 'load', key: $('tk').value, lrn });
-  if (!d.ok) { $('tm').textContent = d.error; return; }
-  buildForms(d); fillLearner(d.learner);
+async function loadPending(){
+ const w=$('pwrap');
+ if(!ME||ME.Role!=='admin'){w.classList.add('hide');return;}
+ const d=await api({action:'pending',...cred()});
+ if(!d.ok||!d.users.length){w.classList.add('hide');return;}
+ w.classList.remove('hide');
+ $('pend').innerHTML='<table class="ed"><tr><th>Name</th><th>Username</th><th>Role</th><th>Section / Subjects</th><th></th></tr>'+d.users.map(u=>`<tr><td>${esc(u.Name)}</td><td>${esc(u.Username)}</td><td>${esc(u.Role)}</td><td>${esc(u.Section||u.Subjects)}</td><td><button class="btn pri" onclick="decide('${esc(u.Username)}',true)">Approve</button> <button class="btn" onclick="decide('${esc(u.Username)}',false)">Reject</button></td></tr>`).join('')+'</table>';
+}
+async function decide(username,approve){
+ const x=await post({action:'decide',username,approve,...cred()});
+ if(!x.ok)alert(x.error);loadPending();
+}
+let ME=null,ASEC='';
+function setupAssign(L){
+ const w=$('as');
+ if(!ME||!(ME.Role==='adviser'||ME.Role==='admin')){w.classList.add('hide');return;}
+ w.classList.remove('hide');
+ let sel='';
+ if(ME.Role==='adviser')ASEC=ME.Section;
+ else{const secs=[...new Set(L.map(l=>l.Section).filter(Boolean))].sort();ASEC=secs[0]||'';
+  sel=`<div class="row" style="margin-top:8px"><div><label>Section</label><select onchange="ASEC=this.value;loadAssign()">${secs.map(x=>`<option>${esc(x)}</option>`).join('')}</select></div></div>`;}
+ w.innerHTML=`<b>Subject teachers${ME.Role==='adviser'?' — '+esc(ME.Section):''}</b><div class="msg">Choose who teaches each subject in this section. A teacher only sees this section's learners and can enter grades for the subject(s) assigned to them.</div>${sel}<div class="scroll" id="ab"></div><div id="am" class="msg"></div>`;
+ if(ASEC)loadAssign();else $('ab').textContent='No learners/section yet.';
+}
+async function loadAssign(){
+ const d=await api({action:'assignments',section:ASEC,...cred()});
+ if(!d.ok){$('am').className='msg err';$('am').textContent=d.error;return;}
+ const opts='<option value="">Choose teacher…</option>'+d.teachers.map(t=>`<option value="${esc(t.Username)}">${esc(t.Name)}${t.Subjects?' · '+esc(t.Subjects):''}</option>`).join('');
+ $('ab').innerHTML='<table class="ed"><tr><th>Subject</th><th>Assigned teacher</th><th>Change to</th><th></th></tr>'+INPUT_SUBJ.map((s,i)=>{const c=d.assignments.find(a=>a.Subject===s);
+  return `<tr><td style="text-align:left">${esc(s)}</td><td>${c?esc(c.Name):'—'}</td><td><select id="as${i}">${opts}</select></td><td style="white-space:nowrap"><button class="btn pri" onclick="assignT(${i})">Assign</button>${c?` <button class="btn" onclick="unassignT(${i})">Remove</button>`:''}</td></tr>`;}).join('')+'</table>'+(d.teachers.length?'':'<div class="msg">No approved teacher accounts yet.</div>');
+}
+async function assignT(i){
+ const t=$('as'+i).value;if(!t)return;
+ const x=await post({action:'assign',section:ASEC,subject:INPUT_SUBJ[i],teacher:t,...cred()});
+ $('am').className=x.ok?'msg':'msg err';$('am').textContent=x.ok?'Assigned ✔':x.error;loadAssign();
+}
+async function unassignT(i){
+ const x=await post({action:'unassign',section:ASEC,subject:INPUT_SUBJ[i],...cred()});
+ $('am').className=x.ok?'msg':'msg err';$('am').textContent=x.ok?'Removed.':x.error;loadAssign();
+}
+const cred=()=>({u:$('tu').value.trim(),p:$('tp').value});
+const NEW={Grade:7,SchoolYear:'2026–2027',Sex:'Female'};
+const PROF=['LRN','Name','Age','Sex','Section','Grade','SchoolYear','Code','Adviser','Principal'];
+function applyPerm(){
+ const r=ME.Role,subs=String(ME.Subjects||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
+ PROF.forEach(k=>$('f_'+k).disabled=r!=='admin');
+ document.querySelectorAll('[data-g]').forEach(el=>{const n=INPUT_SUBJ[+el.dataset.g].toLowerCase();el.disabled=!(r==='admin'||(r==='teacher'&&(ME.mine||[]).some(m=>m.Subject===INPUT_SUBJ[+el.dataset.g]&&String(m.Section).trim().toLowerCase()===String($('f_Section').value).trim().toLowerCase())));});
+ const info=r==='admin'||r==='adviser';
+ document.querySelectorAll('[data-a],#f_C1,#f_C2,#f_C3').forEach(el=>el.disabled=!info);
+ $('bd').style.display=r==='admin'?'':'none';
+}
+async function listL(){
+ $('tm').className='msg';$('tm').textContent='Loading…';
+ try{
+  const d=await api({action:'list',...cred()});
+  if(!d.ok){$('tm').className='msg err';$('tm').textContent=d.error;return;}
+  ME=d.user;ME.mine=d.mine||[];
+  $('ls').innerHTML=(ME.Role==='admin'?'<option value="">— New learner —</option>':'<option value="">— Select learner —</option>')+d.learners.map(l=>`<option value="${esc(l.LRN)}">${esc(l.Name)} (${esc(l.Section)})</option>`).join('');
+  const role={admin:'Admin',adviser:'Adviser of '+ME.Section,teacher:'Subject teacher'}[ME.Role]||ME.Role;
+  $('tm').textContent=`Logged in as ${ME.Name||ME.Username} · ${role} · ${d.learners.length} learner(s)`;
+  $('cl').innerHTML=d.learners.length?`<table class="ed"><tr><th>#</th><th>Name</th><th>LRN</th><th>Section</th><th></th></tr>${d.learners.map((l,i)=>`<tr><td>${i+1}</td><td style="text-align:left">${esc(l.Name)}</td><td>${esc(l.LRN)}</td><td>${esc(l.Section)}</td><td><button class="btn" onclick="$('ls').value='${esc(l.LRN)}';loadL('${esc(l.LRN)}')">Open</button></td></tr>`).join('')}</table>`:'';
+  buildForms();fillLearner(NEW);applyPerm();loadPending();setupAssign(d.learners);
+  $('ed').classList.toggle('hide',ME.Role!=='admin');
+ }catch(e){$('tm').className='msg err';$('tm').textContent='Could not connect. Check the API URL.';}
+}
+async function loadL(lrn){
+ if(!ME)return;
+ if(!lrn){buildForms();fillLearner(NEW);applyPerm();$('ed').classList.toggle('hide',ME.Role!=='admin');return;}
+ const d=await api({action:'load',lrn,...cred()});
+ if(!d.ok){$('tm').className='msg err';$('tm').textContent=d.error;return;}
+ buildForms(d);fillLearner(d.learner);applyPerm();if(ME.Role==='teacher'){$('sm').className='msg';$('sm').textContent='You can edit only the subjects your adviser assigned to you for this section.';}$('ed').classList.remove('hide');$('ed').scrollIntoView();
 }
 function collect() {
   const L = {}; ['LRN', 'Name', 'Age', 'Sex', 'Section', 'Grade', 'SchoolYear', 'Code', 'Adviser', 'Principal', 'C1', 'C2', 'C3'].forEach(k => L[k] = $('f_' + k).value.trim());
@@ -252,19 +336,23 @@ function collect() {
   const grades = INPUT_SUBJ.map((s, i) => { const g = { Subject: s }; [1, 2, 3].forEach(t => g['T' + t] = document.querySelector(`[data-g="${i}"][data-t="${t}"]`).value); return g; });
   return { learner: L, grades };
 }
-async function save() {
-  const d = collect();
-  if (!d.learner.LRN || !d.learner.Name || !d.learner.Code) { $('sm').className = 'msg err'; $('sm').textContent = 'LRN, Name and Access Code are required.'; return; }
-  $('sm').className = 'msg'; $('sm').textContent = 'Saving…';
-  const r = await post({ action: 'save', key: $('tk').value, ...d });
-  $('sm').className = r.ok ? 'msg' : 'msg err'; $('sm').textContent = r.ok ? 'Saved ✔' : r.error;
-  if (r.ok) listL();
+async function save(){
+ const d=collect(),L=d.learner,r=ME.Role;
+ if(!L.LRN){$('sm').className='msg err';$('sm').textContent='Select a learner first.';return;}
+ let body;
+ if(r==='admin'){if(!L.Name||!L.Code){$('sm').className='msg err';$('sm').textContent='LRN, Name and Access Code are required.';return;}body={action:'save',...d};}
+ else if(r==='adviser')body={action:'saveInfo',lrn:L.LRN,C1:L.C1,C2:L.C2,C3:L.C3,Days:L.Days};
+ else body={action:'saveGrades',lrn:L.LRN,grades:d.grades};
+ $('sm').className='msg';$('sm').textContent='Saving…';
+ const x=await post({...body,...cred()});
+ $('sm').className=x.ok?'msg':'msg err';$('sm').textContent=x.ok?'Saved ✔':x.error;
+ if(x.ok&&r==='admin')listL();
 }
-async function del() {
-  const lrn = $('f_LRN').value.trim();
-  if (!lrn || !confirm('Delete learner ' + lrn + '?')) return;
-  const r = await post({ action: 'delete', key: $('tk').value, lrn });
-  $('sm').textContent = r.ok ? 'Deleted.' : r.error; if (r.ok) listL();
+async function del(){
+ const lrn=$('f_LRN').value.trim();
+ if(!lrn||!confirm('Delete learner '+lrn+'?'))return;
+ const x=await post({action:'delete',lrn,...cred()});
+ $('sm').textContent=x.ok?'Deleted.':x.error;if(x.ok)listL();
 }
 function preview() { show(collect()); }
 </script>

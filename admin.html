@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · Grading Portal</title>
+<style>
+:root{--bg:#f3f5f9;--card:#fff;--tx:#1b2430;--mu:#5b6675;--ac:#1d4e9e;--bd:#cfd6e2;--er:#d33}
+@media(prefers-color-scheme:dark){:root{--bg:#12161d;--card:#1b212b;--tx:#e8ecf2;--mu:#9aa6b6;--ac:#6ea0f0;--bd:#37414f;--er:#ff6b6b}}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--tx)}
+header{background:var(--ac);color:#fff;padding:14px 18px}header h1{margin:0;font-size:18px}header a{float:right;color:#fff;font-size:12px}
+main{max-width:1150px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:14px}
+label{font-size:12px;color:var(--mu);display:block;margin-bottom:3px}
+input,select,textarea{width:100%;padding:7px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:13px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:10px}
+.btn{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:7px 12px;border-radius:7px;cursor:pointer;font-size:13px}
+.btn.pri{background:var(--ac);color:#fff;border-color:var(--ac)}.btn.del{color:var(--er)}
+.tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}.tabs .btn.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid var(--bd);padding:4px;text-align:left;vertical-align:middle}
+.scroll{overflow-x:auto}.hide{display:none}.msg{font-size:13px;color:var(--mu);margin:8px 0}.err{color:var(--er)}
+.pend{background:rgba(255,190,0,.15)}.tag{font-size:11px;padding:2px 6px;border-radius:9px;background:var(--bd)}
+</style>
+</head>
+<body>
+<header><a href="index.html">← Back to portal</a><h1>Admin Page</h1></header>
+<main>
+<div class="card" id="lg">
+ <div class="row">
+  <div><label>Admin email / username</label><input id="u" autocomplete="username"></div>
+  <div><label>Password</label><input id="p" type="password" autocomplete="current-password"></div>
+  <div style="align-self:end"><button class="btn pri" onclick="login()">Log in</button></div>
+ </div>
+ <div id="lm" class="msg"></div>
+</div>
+
+<div id="app" class="hide">
+ <div class="tabs">
+  <button class="btn on" id="b1" onclick="tab(1)">Accounts</button>
+  <button class="btn" id="b2" onclick="tab(2)">Learners</button>
+  <button class="btn" id="b3" onclick="tab(3)">Import Learners</button>
+  <button class="btn" onclick="logout()" style="margin-left:auto">Log out</button>
+ </div>
+
+ <div id="t1" class="card"><b>Teacher &amp; adviser accounts</b>
+  <div class="msg">Yellow rows are waiting for approval. Adviser = Section; Subject teacher = Subjects (comma-separated).</div>
+  <div class="scroll"><table id="ut"></table></div><div id="um" class="msg"></div>
+ </div>
+
+ <div id="t2" class="card hide"><b>Learners</b> <span id="lc" class="msg"></span>
+  <div class="row" style="margin-top:8px"><div><label>Search name / LRN / section</label><input id="q" oninput="drawL()"></div></div>
+  <div class="scroll"><table id="lt"></table></div><div id="lmg" class="msg"></div>
+ </div>
+
+ <div id="t3" class="card hide"><b>Import many learners at once</b>
+  <div class="msg">One learner per line: <code>LRN ; Name ; Age ; Sex ; Section</code> (you can also paste rows copied from Excel/Google Sheets). LRN must be 12 digits. Existing LRNs are skipped. A 6-digit parent access code is made for each learner.</div>
+  <div class="row">
+   <div><label>Grade</label><input id="dg" value="7"></div>
+   <div><label>School Year</label><input id="dy" value="2026–2027"></div>
+   <div><label>Adviser (printed on report)</label><input id="da"></div>
+   <div><label>Principal</label><input id="dp"></div>
+  </div>
+  <textarea id="im" rows="9" placeholder="129538190038 ; ALIBANGO, RECCA MAY PANILAWON ; 12 ; Female ; ATIS"></textarea>
+  <p><button class="btn pri" onclick="doImport()">Import</button></p><div id="imm" class="msg"></div>
+ </div>
+</div>
+</main>
+<script>
+// Same Apps Script Web App URL as index.html:
+const API = 'https://script.google.com/macros/s/AKfycbwu0FHxvzmGlG4u6a2-pX4W3NLCP-k-4Rz_WCFTdpjUkVUnBYEF1pb9IhLKPRde5BNinA/exec';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let C = null, USERS = [], LEARNERS = [];
+const api = async o => (await fetch(API + '?' + new URLSearchParams({ ...o, ...C }))).json();
+const post = async o => (await fetch(API, { method: 'POST', body: JSON.stringify({ ...o, ...C }) })).json();
+
+async function login() {
+  C = { u: $('u').value.trim(), p: $('p').value };
+  $('lm').className = 'msg'; $('lm').textContent = 'Checking…';
+  try {
+    const d = await api({ action: 'users' });
+    if (!d.ok) { C = null; $('lm').className = 'msg err'; $('lm').textContent = d.error === 'Admin only.' ? 'This page is for the admin only.' : d.error; return; }
+    $('lg').classList.add('hide'); $('app').classList.remove('hide'); USERS = d.users; drawU(); loadL();
+  } catch (e) { C = null; $('lm').className = 'msg err'; $('lm').textContent = 'Could not connect. Check the API URL.'; }
+}
+function logout() { C = null; $('p').value = ''; $('app').classList.add('hide'); $('lg').classList.remove('hide'); }
+function tab(n) { [1, 2, 3].forEach(i => { $('t' + i).classList.toggle('hide', i !== n); $('b' + i).classList.toggle('on', i === n); }); }
+
+/* accounts */
+async function loadU() { const d = await api({ action: 'users' }); if (d.ok) { USERS = d.users; drawU(); } }
+function drawU() {
+  const rows = [...USERS].sort((a, b) => (a.Status === 'pending' ? 0 : 1) - (b.Status === 'pending' ? 0 : 1));
+  $('ut').innerHTML = '<tr><th>Name</th><th>Email / Username</th><th>Role</th><th>Section</th><th>Subjects</th><th>Status</th><th></th></tr>' + rows.map((u, i) => {
+    const k = 'r' + i, p = u.Status === 'pending';
+    return `<tr class="${p ? 'pend' : ''}"><td><input id="${k}n" value="${esc(u.Name)}"></td><td>${esc(u.Username)}</td>
+<td><select id="${k}r">${['admin', 'adviser', 'teacher'].map(r => `<option ${r === u.Role ? 'selected' : ''}>${r}</option>`).join('')}</select></td>
+<td><input id="${k}s" value="${esc(u.Section)}"></td><td><input id="${k}j" value="${esc(u.Subjects)}"></td>
+<td><span class="tag">${esc(u.Status)}</span></td>
+<td style="white-space:nowrap">${p ? `<button class="btn pri" onclick="uSave(${i},'${k}','active')">Approve</button> ` : `<button class="btn" onclick="uSave(${i},'${k}')">Save</button> `}
+<button class="btn" onclick="uPw(${i})">Reset password</button> <button class="btn del" onclick="uDel(${i})">${p ? 'Reject' : 'Delete'}</button></td></tr>`;
+  }).join('');
+  window._rows = rows;
+}
+async function uSave(i, k, status) {
+  const u = window._rows[i];
+  const x = await post({ action: 'userUpdate', username: u.Username, name: $(k + 'n').value.trim(), role: $(k + 'r').value, section: $(k + 's').value.trim(), subjects: $(k + 'j').value.trim(), status });
+  $('um').className = x.ok ? 'msg' : 'msg err'; $('um').textContent = x.ok ? 'Saved ✔' : x.error; loadU();
+}
+async function uPw(i) {
+  const u = window._rows[i], pw = prompt('New password for ' + u.Username + ' (min 6 characters):');
+  if (!pw) return;
+  const x = await post({ action: 'userUpdate', username: u.Username, newPassword: pw });
+  $('um').className = x.ok ? 'msg' : 'msg err'; $('um').textContent = x.ok ? 'Password changed ✔' : x.error;
+}
+async function uDel(i) {
+  const u = window._rows[i];
+  if (!confirm((u.Status === 'pending' ? 'Reject ' : 'Delete ') + u.Username + '?')) return;
+  const x = await post({ action: 'userDelete', username: u.Username });
+  $('um').className = x.ok ? 'msg' : 'msg err'; $('um').textContent = x.ok ? 'Done ✔' : x.error; loadU();
+}
+
+/* learners */
+async function loadL() { const d = await api({ action: 'learners' }); if (d.ok) { LEARNERS = d.learners; drawL(); } }
+function drawL() {
+  const q = $('q').value.trim().toLowerCase();
+  const L = LEARNERS.filter(l => !q || [l.Name, l.LRN, l.Section].join(' ').toLowerCase().includes(q));
+  $('lc').textContent = `· ${L.length} of ${LEARNERS.length}`;
+  $('lt').innerHTML = '<tr><th>#</th><th>Name</th><th>LRN</th><th>Sex</th><th>Section</th><th>Parent Access Code</th><th></th></tr>' +
+    L.map((l, i) => `<tr><td>${i + 1}</td><td>${esc(l.Name)}</td><td>${esc(l.LRN)}</td><td>${esc(l.Sex)}</td><td>${esc(l.Section)}</td><td>${esc(l.Code)}</td><td><button class="btn del" onclick="lDel('${esc(l.LRN)}')">Delete</button></td></tr>`).join('');
+}
+async function lDel(lrn) {
+  if (!confirm('Delete learner ' + lrn + ' and all grades?')) return;
+  const x = await post({ action: 'delete', lrn });
+  $('lmg').className = x.ok ? 'msg' : 'msg err'; $('lmg').textContent = x.ok ? 'Deleted.' : x.error; loadL();
+}
+
+/* import */
+async function doImport() {
+  const rows = $('im').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+    const c = l.split(/\t|;|\|/).map(x => x.trim());
+    return { LRN: c[0], Name: c[1], Age: c[2], Sex: c[3], Section: c[4] };
+  });
+  if (!rows.length) { $('imm').textContent = 'Paste at least one line.'; return; }
+  $('imm').className = 'msg'; $('imm').textContent = 'Importing…';
+  const x = await post({ action: 'importLearners', rows, defaults: { Grade: $('dg').value, SchoolYear: $('dy').value, Adviser: $('da').value.trim(), Principal: $('dp').value.trim() } });
+  if (!x.ok) { $('imm').className = 'msg err'; $('imm').textContent = x.error; return; }
+  $('imm').textContent = `Added ${x.added} learner(s).` + (x.skipped.length ? ` Skipped ${x.skipped.length}: ${x.skipped.slice(0, 10).join(', ')}` : '');
+  loadL();
+}
+</script>
+</body>
+</html>
