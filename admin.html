@@ -39,6 +39,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid 
   <button class="btn on" id="b1" onclick="tab(1)">Accounts</button>
   <button class="btn" id="b2" onclick="tab(2)">Learners</button>
   <button class="btn" id="b3" onclick="tab(3)">Import Learners</button>
+  <button class="btn" id="b4" onclick="tab(4)">Subjects</button>
+  <button class="btn" id="b5" onclick="tab(5)">Logos</button>
   <button class="btn" onclick="logout()" style="margin-left:auto">Log out</button>
  </div>
 
@@ -63,6 +65,20 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid 
   <textarea id="im" rows="9" placeholder="129538190038 ; ALIBANGO, RECCA MAY PANILAWON ; 12 ; Female ; ATIS"></textarea>
   <p><button class="btn pri" onclick="doImport()">Import</button></p><div id="imm" class="msg"></div>
  </div>
+
+ <div id="t4" class="card hide"><b>Subjects</b>
+  <div class="msg">Add, rename, reorder or remove subjects. Choose "Part of" to make a subject a component of another (e.g. Music and Arts → MAPEH); the parent's grade is then the average of its components and isn't typed in. Renaming keeps existing grades. <b>Removing a subject deletes its grades and teacher assignments.</b></div>
+  <div class="scroll"><table id="st"></table></div>
+  <p><button class="btn" onclick="sAdd()">➕ Add subject</button> <button class="btn pri" onclick="sSave()">Save subjects</button></p><div id="sm" class="msg"></div>
+ </div>
+
+ <div id="t5" class="card hide"><b>Report card logos</b>
+  <div class="msg">Upload a picture (PNG/JPG) for each logo. It is resized automatically. The DepEd logo stays fixed.</div>
+  <div class="row">
+   <div class="card"><label>Division logo</label><img id="lgd" height="90" alt=""><p><input type="file" id="lfd" accept="image/*"></p><button class="btn pri" onclick="logoUp('division')">Upload</button> <button class="btn" onclick="logoUp('division',true)">Use default</button></div>
+   <div class="card"><label>School logo</label><img id="lgs" height="90" alt=""><p><input type="file" id="lfs" accept="image/*"></p><button class="btn pri" onclick="logoUp('school')">Upload</button> <button class="btn" onclick="logoUp('school',true)">Use default</button></div>
+  </div><div id="lgm" class="msg"></div>
+ </div>
 </div>
 </main>
 <script>
@@ -80,11 +96,11 @@ async function login() {
   try {
     const d = await api({ action: 'users' });
     if (!d.ok) { C = null; $('lm').className = 'msg err'; $('lm').textContent = d.error === 'Admin only.' ? 'This page is for the admin only.' : d.error; return; }
-    $('lg').classList.add('hide'); $('app').classList.remove('hide'); USERS = d.users; drawU(); loadL();
+    $('lg').classList.add('hide'); $('app').classList.remove('hide'); USERS = d.users; drawU(); loadL(); loadCfg();
   } catch (e) { C = null; $('lm').className = 'msg err'; $('lm').textContent = 'Could not connect. Check the API URL.'; }
 }
 function logout() { C = null; $('p').value = ''; $('app').classList.add('hide'); $('lg').classList.remove('hide'); }
-function tab(n) { [1, 2, 3].forEach(i => { $('t' + i).classList.toggle('hide', i !== n); $('b' + i).classList.toggle('on', i === n); }); }
+function tab(n) { [1, 2, 3, 4, 5].forEach(i => { $('t' + i).classList.toggle('hide', i !== n); $('b' + i).classList.toggle('on', i === n); }); }
 
 /* accounts */
 async function loadU() { const d = await api({ action: 'users' }); if (d.ok) { USERS = d.users; drawU(); } }
@@ -146,6 +162,65 @@ async function doImport() {
   if (!x.ok) { $('imm').className = 'msg err'; $('imm').textContent = x.error; return; }
   $('imm').textContent = `Added ${x.added} learner(s).` + (x.skipped.length ? ` Skipped ${x.skipped.length}: ${x.skipped.slice(0, 10).join(', ')}` : '');
   loadL();
+}
+
+/* subjects & logos */
+let SUBS = [], LOGOS = {};
+async function loadCfg() {
+  const d = await (await fetch(API + '?action=config')).json();
+  if (!d.ok) return;
+  SUBS = d.subjects.map(s => ({ Name: s.Name, Parent: s.Parent, Old: s.Name })); LOGOS = d.logos || {};
+  drawS(); $('lgd').src = LOGOS.division || 'davao-division.png'; $('lgs').src = LOGOS.school || 'cnhs.png';
+}
+function drawS() {
+  $('st').innerHTML = '<tr><th>#</th><th>Subject</th><th>Part of (optional)</th><th></th></tr>' + SUBS.map((s, i) => {
+    const opts = '<option value="">— none —</option>' + SUBS.filter((x, j) => j !== i && x.Name.trim() && !x.Parent).map(x => `<option ${x.Name === s.Parent ? 'selected' : ''}>${esc(x.Name)}</option>`).join('');
+    return `<tr><td>${i + 1}</td><td><input value="${esc(s.Name)}" oninput="sRen(${i},this.value)" onchange="drawS()"></td><td><select onchange="SUBS[${i}].Parent=this.value">${opts}</select></td>
+<td style="white-space:nowrap"><button class="btn" onclick="sMv(${i},-1)">↑</button> <button class="btn" onclick="sMv(${i},1)">↓</button> <button class="btn del" onclick="sDel(${i})">Remove</button></td></tr>`;
+  }).join('');
+}
+function sRen(i, v) { const o = SUBS[i].Name; SUBS.forEach(x => { if (x.Parent === o) x.Parent = v; }); SUBS[i].Name = v; }
+function sAdd() { SUBS.push({ Name: '', Parent: '', Old: '' }); drawS(); }
+function sMv(i, d) { const j = i + d; if (j < 0 || j >= SUBS.length) return;[SUBS[i], SUBS[j]] = [SUBS[j], SUBS[i]]; drawS(); }
+function sDel(i) {
+  const s = SUBS[i];
+  if (!confirm('Remove "' + (s.Name || 'this row') + '"? Its grades and teacher assignments will be deleted when you save.')) return;
+  SUBS.forEach(x => { if (x.Parent === s.Name) x.Parent = ''; }); SUBS.splice(i, 1); drawS();
+}
+async function sSave() {
+  $('sm').className = 'msg'; $('sm').textContent = 'Saving…';
+  const x = await post({ action: 'subjectsSave', subjects: SUBS.map(s => ({ Name: s.Name.trim(), Parent: s.Parent, Old: s.Old })) });
+  $('sm').className = x.ok ? 'msg' : 'msg err'; $('sm').textContent = x.ok ? 'Saved ✔' : x.error; if (x.ok) loadCfg();
+}
+function toData(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onerror = () => rej(new Error('Could not read the file.'));
+    r.onload = () => {
+      const im = new Image();
+      im.onerror = () => rej(new Error('Not a valid image.'));
+      im.onload = () => {
+        const S = 120, c = document.createElement('canvas'); c.width = c.height = S;
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, S, S);
+        const k = Math.min(S / im.width, S / im.height), w = im.width * k, h = im.height * k;
+        g.drawImage(im, (S - w) / 2, (S - h) / 2, w, h); res(c.toDataURL('image/jpeg', 0.85));
+      };
+      im.src = r.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
+async function logoUp(which, reset) {
+  const m = $('lgm'); m.className = 'msg';
+  let data = '';
+  if (!reset) {
+    const f = $(which === 'division' ? 'lfd' : 'lfs').files[0];
+    if (!f) { m.className = 'msg err'; m.textContent = 'Choose a picture first.'; return; }
+    try { data = await toData(f); } catch (e) { m.className = 'msg err'; m.textContent = e.message; return; }
+  }
+  m.textContent = 'Saving…';
+  const x = await post({ action: 'logoSave', which, data });
+  m.className = x.ok ? 'msg' : 'msg err'; m.textContent = x.ok ? (reset ? 'Default restored ✔' : 'Logo saved ✔') : x.error; if (x.ok) loadCfg();
 }
 </script>
 </body>

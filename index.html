@@ -74,7 +74,7 @@ table.r td.c,table.r th.c{text-align:center}
   <div class="row">
    <div><label>Email / Username</label><input id="tu" autocomplete="username"></div>
    <div><label>Password</label><input id="tp" type="password" autocomplete="current-password"></div>
-   <div style="align-self:end"><button class="btn pri" onclick="listL()">Log in</button></div>
+   <div style="align-self:end"><button class="btn pri" onclick="listL()">Log in</button> <button class="btn hide" id="lo" onclick="logout()">Log out</button></div>
    <div><label>Learner</label><select id="ls" onchange="loadL(this.value)"></select></div>
   </div>
   <div id="tm" class="msg"></div>
@@ -112,7 +112,7 @@ table.r td.c,table.r th.c{text-align:center}
     <div><label>Principal</label><input id="f_Principal"></div>
    </div>
   </div>
-  <div class="card scroll"><b>Grades</b> <span class="msg">(leave blank if not yet graded; MAPEH is computed)</span>
+  <div class="card scroll"><b>Grades</b> <span class="msg">(leave blank if not yet graded; admin can edit or clear any grade; subjects made of components, like MAPEH, are computed)</span>
    <table class="ed" id="gt"></table>
   </div>
   <div class="card scroll"><b>Attendance</b><table class="ed" id="at"></table></div>
@@ -123,7 +123,7 @@ table.r td.c,table.r th.c{text-align:center}
   </div>
   <div class="card">
    <button class="btn pri" onclick="save()">Save to Sheet</button>
-   <button class="btn" onclick="preview()">Preview Report</button>
+   <button class="btn" onclick="preview()">🖨 Print Preview</button>
    <button class="btn" id="bd" onclick="del()">Delete Learner</button>
    <div id="sm" class="msg"></div>
   </div>
@@ -131,7 +131,7 @@ table.r td.c,table.r th.c{text-align:center}
 </section>
 
 <div id="rw" class="hide">
- <div class="noprint" style="margin:6px 0"><button class="btn pri" onclick="window.print()">🖨 Print / Save as PDF</button></div>
+ <div class="noprint" style="margin:6px 0"><button class="btn pri" onclick="window.print()">🖨 Print / Save as PDF</button> <button class="btn" onclick="$('rw').classList.add('hide')">✖ Close preview</button></div>
  <div class="scroll" id="printArea"></div>
 </div>
 </main>
@@ -140,9 +140,14 @@ table.r td.c,table.r th.c{text-align:center}
 // Apps Script Web App URL:
 const API = 'https://script.google.com/macros/s/AKfycbwu0FHxvzmGlG4u6a2-pX4W3NLCP-k-4Rz_WCFTdpjUkVUnBYEF1pb9IhLKPRde5BNinA/exec';
 
-const SUBJ = ['Filipino','English','Mathematics','Science','Araling Panlipunan','Values Education','Technology and Livelihood Education (TLE)','Information and Communication Technology (ICT)','MAPEH','Music and Arts','Physical Education and Health'];
-const INPUT_SUBJ = SUBJ.filter(s => s !== 'MAPEH');
-const MAIN = SUBJ.filter(s => !['Music and Arts','Physical Education and Health'].includes(s));
+let CFG={subjects:[['Filipino',''],['English',''],['Mathematics',''],['Science',''],['Araling Panlipunan',''],['Values Education',''],['Technology and Livelihood Education (TLE)',''],['Information and Communication Technology (ICT)',''],['MAPEH',''],['Music and Arts','MAPEH'],['Physical Education and Health','MAPEH']].map(x=>({Name:x[0],Parent:x[1]})),logos:{}};
+let SUBJ=[],INPUT_SUBJ=[],MAIN=[],PARENTS=new Set();
+const isChild=n=>!!(CFG.subjects.find(s=>s.Name===n)||{}).Parent;
+function derive(){
+ const L=CFG.subjects;PARENTS=new Set(L.map(s=>s.Parent).filter(Boolean));SUBJ=[];
+ L.filter(s=>!s.Parent).forEach(s=>{SUBJ.push(s.Name);L.filter(k=>k.Parent===s.Name).forEach(k=>SUBJ.push(k.Name));});
+ INPUT_SUBJ=SUBJ.filter(n=>!PARENTS.has(n));MAIN=L.filter(s=>!s.Parent).map(s=>s.Name);
+}
 const MONTHS = ['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May'];
 const DESC = [[90,'Advancing'],[80,'Benchmarking'],[75,'Connecting'],[65,'Developing'],[0,'Emerging']];
 const $ = id => document.getElementById(id);
@@ -166,8 +171,10 @@ async function post(body) {
 /* ---------- grade computations ---------- */
 function compute(grades) {
   const m = {}; grades.forEach(g => m[g.Subject] = [num(g.T1), num(g.T2), num(g.T3)]);
-  const mu = m['Music and Arts'] || [null, null, null], pe = m['Physical Education and Health'] || [null, null, null];
-  m['MAPEH'] = [0, 1, 2].map(i => (mu[i] !== null && pe[i] !== null) ? Math.round((mu[i] + pe[i]) / 2) : null);
+  CFG.subjects.filter(s=>PARENTS.has(s.Name)).forEach(p=>{
+    const kids=CFG.subjects.filter(k=>k.Parent===p.Name);
+    m[p.Name]=[0,1,2].map(i=>{const v=kids.map(k=>(m[k.Name]||[])[i]);return v.every(x=>x!==null&&x!==undefined)?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null;});
+  });
   const res = {};
   SUBJ.forEach(s => { const t = m[s] || [null, null, null]; res[s] = { t, f: avg(t) }; });
   const ga = avg(MAIN.map(s => res[s].f));
@@ -181,14 +188,14 @@ function report(d) {
   const cd = days.cd || [], pr = days.pr || [], ab = days.ab || [];
   const sum = a => a.some(x => x !== '' && x != null) ? a.reduce((s, x) => s + (+x || 0), 0) : '';
   const rowsHtml = SUBJ.map(s => {
-    const r = res[s], sub = ['Music and Arts', 'Physical Education and Health'].includes(s);
+    const r = res[s], sub = isChild(s);
     return `<tr class="${sub ? 'sub' : ''}"><td>${esc(s.toUpperCase())}</td>${r.t.map(v => `<td class="c">${v ?? ''}</td>`).join('')}<td class="c"><b>${r.f ?? ''}</b></td><td class="c">${rem(r.f)}</td></tr>`;
   }).join('');
   const att = (label, a) => `<tr><td>${label}</td>${MONTHS.map((_, i) => `<td class="c">${a[i] ?? ''}</td>`).join('')}<td class="c">${sum(a)}</td></tr>`;
   const sigs = [1, 2, 3].map(i => `<div class="sig"><span style="width:50px">Term ${i}</span><i></i></div>`).join('');
   return `<div class="paper">
 <div class="pg">
- <div class="top"><div class="logos"><img src="deped.png" alt="DepEd"><img src="davao-division.png" alt="Division of Davao City"><img src="cnhs.png" alt="CNHS"></div>
+ <div class="top"><div class="logos"><img src="deped.png" alt="DepEd"><img src="${CFG.logos.division||'davao-division.png'}" alt="Division"><img src="${CFG.logos.school||'cnhs.png'}" alt="School"></div>
  <div class="hd">Republic of the Philippines<b>Department of Education</b>REGION XI<br>Division of Davao City<br><b style="font-size:11px">Calinan National High School</b>Peñano St. Calinan, Davao City</div></div>
  <div class="t">LEARNER'S PERFORMANCE REPORT</div>
  <div class="cen">School Year <span class="ln" style="min-width:130px">${esc(L.SchoolYear)}</span></div>
@@ -269,7 +276,15 @@ async function decide(username,approve){
  const x=await post({action:'decide',username,approve,...cred()});
  if(!x.ok)alert(x.error);loadPending();
 }
-let ME=null,ASEC='';
+let ME=null,ASEC='',NEWL=false;
+function logout(){
+ ME=null;NEWL=false;
+ ['tu','tp'].forEach(i=>$(i).value='');
+ ['ed','as','pwrap','rw','lo'].forEach(i=>$(i).classList.add('hide'));
+ ['cl','pend','ls','printArea','as'].forEach(i=>$(i).innerHTML='');
+ $('sm').textContent='';$('tm').className='msg';$('tm').textContent='You have been logged out.';
+ window.scrollTo(0,0);
+}
 function setupAssign(L){
  const w=$('as');
  if(!ME||!(ME.Role==='adviser'||ME.Role==='admin')){w.classList.add('hide');return;}
@@ -302,32 +317,39 @@ const NEW={Grade:7,SchoolYear:'2026–2027',Sex:'Female'};
 const PROF=['LRN','Name','Age','Sex','Section','Grade','SchoolYear','Code','Adviser','Principal'];
 function applyPerm(){
  const r=ME.Role,subs=String(ME.Subjects||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
- PROF.forEach(k=>$('f_'+k).disabled=r!=='admin');
+ PROF.forEach(k=>$('f_'+k).disabled=!(r==='admin'||(r==='adviser'&&k!=='Section'&&(k!=='LRN'||NEWL))));
  document.querySelectorAll('[data-g]').forEach(el=>{const n=INPUT_SUBJ[+el.dataset.g].toLowerCase();el.disabled=!(r==='admin'||(r==='teacher'&&(ME.mine||[]).some(m=>m.Subject===INPUT_SUBJ[+el.dataset.g]&&String(m.Section).trim().toLowerCase()===String($('f_Section').value).trim().toLowerCase())));});
+ if(r==='teacher')document.querySelectorAll('[data-g]').forEach(el=>{if(el.value!=='')el.disabled=true;});  // recorded grades are locked; only the admin can change them
  const info=r==='admin'||r==='adviser';
  document.querySelectorAll('[data-a],#f_C1,#f_C2,#f_C3').forEach(el=>el.disabled=!info);
  $('bd').style.display=r==='admin'?'':'none';
 }
-async function listL(){
+async function listL(keep){
  $('tm').className='msg';$('tm').textContent='Loading…';
  try{
   const d=await api({action:'list',...cred()});
   if(!d.ok){$('tm').className='msg err';$('tm').textContent=d.error;return;}
-  ME=d.user;ME.mine=d.mine||[];
+  ME=d.user;ME.mine=d.mine||[];$('lo').classList.remove('hide');
   $('ls').innerHTML=(ME.Role==='admin'?'<option value="">— New learner —</option>':'<option value="">— Select learner —</option>')+d.learners.map(l=>`<option value="${esc(l.LRN)}">${esc(l.Name)} (${esc(l.Section)})</option>`).join('');
   const role={admin:'Admin',adviser:'Adviser of '+ME.Section,teacher:'Subject teacher'}[ME.Role]||ME.Role;
   $('tm').textContent=`Logged in as ${ME.Name||ME.Username} · ${role} · ${d.learners.length} learner(s)`;
-  $('cl').innerHTML=d.learners.length?`<table class="ed"><tr><th>#</th><th>Name</th><th>LRN</th><th>Section</th><th></th></tr>${d.learners.map((l,i)=>`<tr><td>${i+1}</td><td style="text-align:left">${esc(l.Name)}</td><td>${esc(l.LRN)}</td><td>${esc(l.Section)}</td><td><button class="btn" onclick="$('ls').value='${esc(l.LRN)}';loadL('${esc(l.LRN)}')">Open</button></td></tr>`).join('')}</table>`:'';
-  buildForms();fillLearner(NEW);applyPerm();loadPending();setupAssign(d.learners);
-  $('ed').classList.toggle('hide',ME.Role!=='admin');
+  $('cl').innerHTML=(ME.Role==='adviser'?'<p><button class="btn pri" onclick="addL()">➕ Add Learner to '+esc(ME.Section)+'</button></p>':'')+(d.learners.length?`<table class="ed"><tr><th>#</th><th>Name</th><th>LRN</th><th>Section</th><th></th></tr>${d.learners.map((l,i)=>`<tr><td>${i+1}</td><td style="text-align:left">${esc(l.Name)}</td><td>${esc(l.LRN)}</td><td>${esc(l.Section)}</td><td><button class="btn" onclick="$('ls').value='${esc(l.LRN)}';loadL('${esc(l.LRN)}')">Open</button> <button class="btn" onclick="prevL('${esc(l.LRN)}')">🖨 Print Preview</button></td></tr>`).join('')}</table>`:'');
+  if(!keep){buildForms();fillLearner(NEW);applyPerm();$('ed').classList.toggle('hide',ME.Role!=='admin');setupAssign(d.learners);}
+  loadPending();
  }catch(e){$('tm').className='msg err';$('tm').textContent='Could not connect. Check the API URL.';}
 }
+function addL(){
+ buildForms();$('ls').value='';NEWL=true;
+ fillLearner({...NEW,Section:ME.Section,Adviser:ME.Name||'',Code:String(Math.floor(100000+Math.random()*900000))});
+ applyPerm();$('ed').classList.remove('hide');$('ed').scrollIntoView();
+ $('sm').className='msg';$('sm').textContent='New learner: enter the LRN (12 digits) and name, then Save. The parent access code was generated for you.';
+}
 async function loadL(lrn){
- if(!ME)return;
+ if(!ME)return;NEWL=false;
  if(!lrn){buildForms();fillLearner(NEW);applyPerm();$('ed').classList.toggle('hide',ME.Role!=='admin');return;}
  const d=await api({action:'load',lrn,...cred()});
  if(!d.ok){$('tm').className='msg err';$('tm').textContent=d.error;return;}
- buildForms(d);fillLearner(d.learner);applyPerm();if(ME.Role==='teacher'){$('sm').className='msg';$('sm').textContent='You can edit only the subjects your adviser assigned to you for this section.';}$('ed').classList.remove('hide');$('ed').scrollIntoView();
+ buildForms(d);fillLearner(d.learner);applyPerm();if(ME.Role==='teacher'){$('sm').className='msg';$('sm').textContent='You can enter grades only for your assigned subjects, and only where no grade is recorded yet. Changing or deleting a recorded grade is done by the admin.';}$('ed').classList.remove('hide');$('ed').scrollIntoView();
 }
 function collect() {
   const L = {}; ['LRN', 'Name', 'Age', 'Sex', 'Section', 'Grade', 'SchoolYear', 'Code', 'Adviser', 'Principal', 'C1', 'C2', 'C3'].forEach(k => L[k] = $('f_' + k).value.trim());
@@ -340,6 +362,16 @@ function collect() {
 async function save(){
  const d=collect(),L=d.learner,r=ME.Role;
  if(!L.LRN){$('sm').className='msg err';$('sm').textContent='Select a learner first.';return;}
+ if(r==='adviser'){
+  if(!/^\d{12}$/.test(L.LRN)||!L.Name){$('sm').className='msg err';$('sm').textContent="Enter a 12-digit LRN and the learner's name.";return;}
+  $('sm').className='msg';$('sm').textContent='Saving…';
+  const x1=await post({action:'saveLearner',learner:L,...cred()});
+  if(!x1.ok){$('sm').className='msg err';$('sm').textContent=x1.error;return;}
+  const x2=await post({action:'saveInfo',lrn:L.LRN,C1:L.C1,C2:L.C2,C3:L.C3,Days:L.Days,...cred()});
+  $('sm').className=x2.ok?'msg':'msg err';$('sm').textContent=x2.ok?'Saved ✔':x2.error;
+  if(x2.ok){NEWL=false;await listL(true);$('ls').value=L.LRN;applyPerm();}
+  return;
+ }
  let body;
  if(r==='admin'){if(!L.Name||!L.Code){$('sm').className='msg err';$('sm').textContent='LRN, Name and Access Code are required.';return;}body={action:'save',...d};}
  else if(r==='adviser')body={action:'saveInfo',lrn:L.LRN,C1:L.C1,C2:L.C2,C3:L.C3,Days:L.Days};
@@ -348,6 +380,7 @@ async function save(){
  const x=await post({...body,...cred()});
  $('sm').className=x.ok?'msg':'msg err';$('sm').textContent=x.ok?'Saved ✔':x.error;
  if(x.ok&&r==='admin')listL();
+ if(x.ok&&r==='teacher'){await loadL(L.LRN);$('sm').className='msg';$('sm').textContent='Saved ✔'+(x.ignored?' — '+x.ignored+' value(s) were already recorded; only the admin can change them.':'');}
 }
 async function del(){
  const lrn=$('f_LRN').value.trim();
@@ -355,7 +388,15 @@ async function del(){
  const x=await post({action:'delete',lrn,...cred()});
  $('sm').textContent=x.ok?'Deleted.':x.error;if(x.ok)listL();
 }
+async function prevL(lrn){
+ $('tm').className='msg';$('tm').textContent='Loading report…';
+ const d=await api({action:'load',lrn,...cred()});
+ if(!d.ok){$('tm').className='msg err';$('tm').textContent=d.error;return;}
+ $('tm').textContent='';show(d);
+}
 function preview() { show(collect()); }
+async function loadCfg(){try{const d=await api({action:'config'});if(d.ok&&d.subjects&&d.subjects.length){CFG={subjects:d.subjects,logos:d.logos||{}};derive();}}catch(e){}}
+derive();loadCfg();
 </script>
 </body>
 </html>
