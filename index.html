@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learner's Performance Report Portal</title>
+<style>
+:root{--bg:#f3f5f9;--card:#fff;--tx:#1b2430;--mu:#5b6675;--ac:#1d4e9e;--bd:#cfd6e2}
+@media(prefers-color-scheme:dark){:root{--bg:#12161d;--card:#1b212b;--tx:#e8ecf2;--mu:#9aa6b6;--ac:#6ea0f0;--bd:#37414f}}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--tx)}
+header{background:var(--ac);color:#fff;padding:14px 18px}
+header h1{margin:0;font-size:18px}header p{margin:2px 0 0;font-size:12px;opacity:.9}
+main{max-width:1100px;margin:0 auto;padding:16px}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tabs button,.btn{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:9px 14px;border-radius:8px;cursor:pointer;font-size:14px}
+.tabs button.on,.btn.pri{background:var(--ac);color:#fff;border-color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:14px}
+label{font-size:12px;color:var(--mu);display:block;margin-bottom:3px}
+input,select,textarea{width:100%;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx);font-size:14px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px}
+.msg{font-size:13px;margin:8px 0;color:var(--mu)}.err{color:#d33}
+table.ed{width:100%;border-collapse:collapse;font-size:13px}
+table.ed td,table.ed th{border:1px solid var(--bd);padding:3px}
+table.ed input{padding:4px;text-align:center}
+.scroll{overflow-x:auto}
+.hide{display:none}
+/* ===== Report (always light, paper-like) ===== */
+.paper{background:#fff;color:#000;font-family:"Times New Roman",serif;font-size:11px;width:1060px;max-width:none;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;border:1px solid #999}
+.pg{padding:14px 18px}.pg+.pg{border-left:1px solid #000}
+.paper h2{font-size:13px;text-align:center;margin:10px 0 4px;text-transform:uppercase}
+.top{display:flex;align-items:center;gap:8px}.logos{display:flex;gap:6px}.logos img{width:62px;height:62px;object-fit:contain}
+.hd{text-align:left;border-left:2px solid #000;padding-left:6px;font-size:10px;line-height:1.3;margin-bottom:8px}
+.hd b{font-size:13px;display:block}
+.t{text-align:center;font-weight:bold;font-size:15px;margin:10px 0 0}
+.ln{border-bottom:1px solid #000;display:inline-block;min-width:60px;text-align:center}
+table.r{width:100%;border-collapse:collapse;margin-top:3px}
+table.r th,table.r td{border:1px solid #000;padding:2px 4px;font-size:11px}
+table.r td.c,table.r th.c{text-align:center}
+.sub td:first-child{font-style:italic;padding-left:14px}
+.sig{display:flex;align-items:flex-end;gap:10px;margin:8px 0}.sig i{flex:1;border-bottom:1px solid #000;height:14px}
+.box{border:1px solid #000;min-height:46px;padding:4px;margin-top:3px}
+.cen{text-align:center}
+@media print{
+ @page{size:A4 landscape;margin:8mm}
+ body{background:#fff}header,.tabs,.noprint,.card{display:none!important}
+ main{padding:0;max-width:none}#printArea{display:block!important}
+ .paper{width:100%;border:0;font-size:10px}
+}
+</style>
+</head>
+<body>
+<header><h1>Learner's Performance Report Portal</h1><p>Calinan National High School · Division of Davao City</p></header>
+<main>
+<div class="tabs noprint">
+ <button id="tP" class="on" onclick="tab('P')">Parent / Learner</button>
+ <button id="tT" onclick="tab('T')">Teacher</button>
+</div>
+
+<section id="P">
+ <div class="card">
+  <div class="row">
+   <div><label>LRN</label><input id="pl" inputmode="numeric" placeholder="12-digit LRN"></div>
+   <div><label>Access Code</label><input id="pc" type="password" placeholder="Given by the adviser"></div>
+  </div>
+  <button class="btn pri" onclick="viewReport()">View Report</button>
+  <div id="pm" class="msg"></div>
+ </div>
+</section>
+
+<section id="T" class="hide">
+ <div class="card">
+  <div class="row">
+   <div><label>Teacher Key</label><input id="tk" type="password"></div>
+   <div style="align-self:end"><button class="btn pri" onclick="listL()">Unlock / Load Learners</button></div>
+   <div><label>Learners</label><select id="ls" onchange="loadL(this.value)"><option value="">— New learner —</option></select></div>
+  </div>
+  <div id="tm" class="msg"></div>
+ </div>
+ <div id="ed" class="hide">
+  <div class="card">
+   <div class="row">
+    <div><label>LRN</label><input id="f_LRN"></div>
+    <div style="grid-column:span 2"><label>Name (SURNAME, First Middle)</label><input id="f_Name"></div>
+    <div><label>Age</label><input id="f_Age" type="number"></div>
+    <div><label>Sex</label><select id="f_Sex"><option>Female</option><option>Male</option></select></div>
+   </div>
+   <div class="row">
+    <div><label>Section</label><input id="f_Section"></div>
+    <div><label>Grade</label><input id="f_Grade" value="7"></div>
+    <div><label>School Year</label><input id="f_SchoolYear" value="2026–2027"></div>
+    <div><label>Parent Access Code</label><input id="f_Code"></div>
+    <div><label>Adviser</label><input id="f_Adviser"></div>
+    <div><label>Principal</label><input id="f_Principal"></div>
+   </div>
+  </div>
+  <div class="card scroll"><b>Grades</b> <span class="msg">(leave blank if not yet graded; MAPEH is computed)</span>
+   <table class="ed" id="gt"></table>
+  </div>
+  <div class="card scroll"><b>Attendance</b><table class="ed" id="at"></table></div>
+  <div class="card"><b>Teacher's Comments</b>
+   <label>Term 1</label><textarea id="f_C1" rows="2"></textarea>
+   <label>Term 2</label><textarea id="f_C2" rows="2"></textarea>
+   <label>Term 3</label><textarea id="f_C3" rows="2"></textarea>
+  </div>
+  <div class="card">
+   <button class="btn pri" onclick="save()">Save to Sheet</button>
+   <button class="btn" onclick="preview()">Preview Report</button>
+   <button class="btn" onclick="del()">Delete Learner</button>
+   <div id="sm" class="msg"></div>
+  </div>
+ </div>
+</section>
+
+<div id="rw" class="hide">
+ <div class="noprint" style="margin:6px 0"><button class="btn pri" onclick="window.print()">🖨 Print / Save as PDF</button></div>
+ <div class="scroll" id="printArea"></div>
+</div>
+</main>
+
+<script>
+// Apps Script Web App URL:
+const API = 'https://script.google.com/macros/s/AKfycbyj-hWwcT8GhmsVfIPnCOkoLZs8gb1mVxqXowCX3i5bBUkSpOG69O5NZZxT-xx9mnthRQ/exec';
+
+const SUBJ = ['Filipino','English','Mathematics','Science','Araling Panlipunan','Values Education','Technology and Livelihood Education (TLE)','Information and Communication Technology (ICT)','MAPEH','Music and Arts','Physical Education and Health'];
+const INPUT_SUBJ = SUBJ.filter(s => s !== 'MAPEH');
+const MAIN = SUBJ.filter(s => !['Music and Arts','Physical Education and Health'].includes(s));
+const MONTHS = ['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May'];
+const DESC = [[90,'Advancing'],[80,'Benchmarking'],[75,'Connecting'],[65,'Developing'],[0,'Emerging']];
+const $ = id => document.getElementById(id);
+const num = v => (v === '' || v === null || v === undefined || isNaN(+v)) ? null : +v;
+const avg = a => { a = a.filter(x => x !== null); return a.length ? Math.round(a.reduce((s, x) => s + x, 0) / a.length) : null; };
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const rem = g => g === null ? '' : g >= 75 ? 'Passed' : 'Failed';
+
+function tab(t) {
+  $('P').classList.toggle('hide', t !== 'P'); $('T').classList.toggle('hide', t !== 'T');
+  $('tP').classList.toggle('on', t === 'P'); $('tT').classList.toggle('on', t === 'T');
+  $('rw').classList.add('hide');
+}
+async function api(params) {
+  const r = await fetch(API + '?' + new URLSearchParams(params)); return r.json();
+}
+async function post(body) {
+  const r = await fetch(API, { method: 'POST', body: JSON.stringify(body) }); return r.json();
+}
+
+/* ---------- grade computations ---------- */
+function compute(grades) {
+  const m = {}; grades.forEach(g => m[g.Subject] = [num(g.T1), num(g.T2), num(g.T3)]);
+  const mu = m['Music and Arts'] || [null, null, null], pe = m['Physical Education and Health'] || [null, null, null];
+  m['MAPEH'] = [0, 1, 2].map(i => (mu[i] !== null && pe[i] !== null) ? Math.round((mu[i] + pe[i]) / 2) : null);
+  const res = {};
+  SUBJ.forEach(s => { const t = m[s] || [null, null, null]; res[s] = { t, f: avg(t) }; });
+  const ga = avg(MAIN.map(s => res[s].f));
+  return { res, ga };
+}
+
+/* ---------- report renderer ---------- */
+function report(d) {
+  const L = d.learner, { res, ga } = compute(d.grades);
+  let days = {}; try { days = JSON.parse(L.Days || '{}'); } catch (e) {}
+  const cd = days.cd || [], pr = days.pr || [], ab = days.ab || [];
+  const sum = a => a.some(x => x !== '' && x != null) ? a.reduce((s, x) => s + (+x || 0), 0) : '';
+  const rowsHtml = SUBJ.map(s => {
+    const r = res[s], sub = ['Music and Arts', 'Physical Education and Health'].includes(s);
+    return `<tr class="${sub ? 'sub' : ''}"><td>${esc(s.toUpperCase())}</td>${r.t.map(v => `<td class="c">${v ?? ''}</td>`).join('')}<td class="c"><b>${r.f ?? ''}</b></td><td class="c">${rem(r.f)}</td></tr>`;
+  }).join('');
+  const att = (label, a) => `<tr><td>${label}</td>${MONTHS.map((_, i) => `<td class="c">${a[i] ?? ''}</td>`).join('')}<td class="c">${sum(a)}</td></tr>`;
+  const sigs = [1, 2, 3].map(i => `<div class="sig"><span style="width:50px">Term ${i}</span><i></i></div>`).join('');
+  return `<div class="paper">
+<div class="pg">
+ <div class="top"><div class="logos"><img src="deped.png" alt="DepEd"><img src="davao-division.png" alt="Division of Davao City"><img src="cnhs.png" alt="CNHS"></div>
+ <div class="hd">Republic of the Philippines<b>Department of Education</b>REGION XI<br>Division of Davao City<br><b style="font-size:11px">Calinan National High School</b>Peñano St. Calinan, Davao City</div></div>
+ <div class="t">LEARNER'S PERFORMANCE REPORT</div>
+ <div class="cen">School Year <span class="ln" style="min-width:130px">${esc(L.SchoolYear)}</span></div>
+ <p>Name: <span class="ln" style="min-width:230px">${esc(L.Name)}</span> Age: <span class="ln">${esc(L.Age)}</span> Sex: <span class="ln">${esc(L.Sex)}</span><br>
+ LRN: <span class="ln" style="min-width:110px">${esc(L.LRN)}</span> Section: <span class="ln" style="min-width:150px">${esc(L.Section)}</span> Grade: <span class="ln">${esc(L.Grade)}</span></p>
+ <p>Dear Parents,<br>&emsp;This Performance Report shows the ability and progress your child has made in the different learning areas as well as his/her core values.<br>&emsp;The school welcomes you should you desire to know more about your child's progress.</p>
+ <h2>Learning Progress and Achievement</h2>
+ <table class="r"><tr><th rowspan="2">Learning Areas</th><th colspan="3" class="c">TERM</th><th rowspan="2" class="c">Final Grade</th><th rowspan="2" class="c">Remarks</th></tr><tr><th class="c">1</th><th class="c">2</th><th class="c">3</th></tr>
+ ${rowsHtml}
+ <tr><td colspan="4" style="text-align:right"><b><i>General Average</i></b></td><td class="c"><b>${ga ?? ''}</b></td><td class="c"><b><i>${rem(ga)}</i></b></td></tr></table>
+ <h2 style="text-align:left">Performance Descriptors</h2>
+ <table style="width:100%;font-size:11px;text-align:center"><tr><th>Grading Scale</th><th>Description</th><th>Remarks</th></tr>
+ <tr><td>90-100</td><td>Advancing</td><td>Passed</td></tr><tr><td>80-89</td><td>Benchmarking</td><td>Passed</td></tr><tr><td>75-79</td><td>Connecting</td><td>Passed</td></tr><tr><td>65-74</td><td>Developing</td><td>Failed</td></tr><tr><td>0-64</td><td>Emerging</td><td>Failed</td></tr></table>
+</div>
+<div class="pg">
+ <h2 style="margin-top:0">Attendance Record</h2>
+ <table class="r"><tr><th>Month</th>${MONTHS.map(m => `<th class="c">${m}</th>`).join('')}<th class="c">Total</th></tr>
+ ${att('No. of Class Days', cd)}${att('No. of Days Present', pr)}${att('No. of Days Absent', ab)}</table>
+ <h2>Teacher's Comments/Remarks</h2>
+ ${[1, 2, 3].map(i => `<b><i>Term ${i}</i></b><div class="box">${esc(L['C' + i])}</div>`).join('')}
+ <h2>Parents/Guardian's Signature</h2>${sigs}
+ <h2>Certificate of Transfer</h2>
+ <p>This is to certify that the above-named learner has satisfactorily completed the requirements for the grade level indicated.<br>Admitted to Grade: <span class="ln" style="min-width:100px"></span><br>Eligible for Admission to Grade: <span class="ln" style="min-width:100px"></span><br><br>Approved:</p>
+ <div class="cen" style="margin:6px 0 0 40%"><b>${esc(L.Adviser).toUpperCase()}</b><div style="border-top:1px solid #000">Adviser</div></div>
+ <div class="cen" style="width:45%"><b>${esc(L.Principal).toUpperCase()}</b><div style="border-top:1px solid #000">Principal III</div></div>
+ <h2>Cancellation of Eligibility to Transfer</h2>
+ <p>Admitted in: <span class="ln" style="min-width:100px"></span> Date: <span class="ln" style="min-width:100px"></span></p>
+ <div class="cen" style="width:45%;margin-top:18px"><div style="border-top:1px solid #000">Principal III</div></div>
+</div></div>`;
+}
+function show(d) { $('printArea').innerHTML = report(d); $('rw').classList.remove('hide'); $('rw').scrollIntoView(); }
+
+/* ---------- parent view ---------- */
+async function viewReport() {
+  const lrn = $('pl').value.trim(), code = $('pc').value.trim();
+  if (!lrn || !code) { $('pm').textContent = 'Enter LRN and access code.'; return; }
+  $('pm').className = 'msg'; $('pm').textContent = 'Loading…';
+  try {
+    const d = await api({ action: 'report', lrn, code });
+    if (!d.ok) { $('pm').className = 'msg err'; $('pm').textContent = d.error; return; }
+    $('pm').textContent = ''; show(d);
+  } catch (e) { $('pm').className = 'msg err'; $('pm').textContent = 'Could not connect. Check the API URL.'; }
+}
+
+/* ---------- teacher ---------- */
+function buildForms(d) {
+  $('gt').innerHTML = '<tr><th>Learning Area</th><th>Term 1</th><th>Term 2</th><th>Term 3</th></tr>' +
+    INPUT_SUBJ.map((s, i) => `<tr><td>${esc(s)}</td>${[1, 2, 3].map(t => `<td><input data-g="${i}" data-t="${t}" type="number" min="0" max="100"></td>`).join('')}</tr>`).join('');
+  const rowA = (k, l) => `<tr><td>${l}</td>${MONTHS.map((_, i) => `<td><input data-a="${k}" data-i="${i}" type="number" min="0" style="width:52px"></td>`).join('')}</tr>`;
+  $('at').innerHTML = `<tr><th></th>${MONTHS.map(m => `<th>${m}</th>`).join('')}</tr>${rowA('cd', 'Class Days')}${rowA('pr', 'Present')}${rowA('ab', 'Absent')}`;
+  if (!d) return;
+  d.grades.forEach(g => { const i = INPUT_SUBJ.indexOf(g.Subject); if (i < 0) return;[1, 2, 3].forEach(t => document.querySelector(`[data-g="${i}"][data-t="${t}"]`).value = g['T' + t] ?? ''); });
+  let days = {}; try { days = JSON.parse(d.learner.Days || '{}'); } catch (e) {}
+  ['cd', 'pr', 'ab'].forEach(k => (days[k] || []).forEach((v, i) => { const el = document.querySelector(`[data-a="${k}"][data-i="${i}"]`); if (el) el.value = v; }));
+}
+function fillLearner(L) {
+  ['LRN', 'Name', 'Age', 'Sex', 'Section', 'Grade', 'SchoolYear', 'Code', 'Adviser', 'Principal', 'C1', 'C2', 'C3'].forEach(k => { if ($('f_' + k)) $('f_' + k).value = L[k] ?? ''; });
+}
+async function listL() {
+  $('tm').className = 'msg'; $('tm').textContent = 'Loading…';
+  try {
+    const d = await api({ action: 'list', key: $('tk').value });
+    if (!d.ok) { $('tm').className = 'msg err'; $('tm').textContent = d.error; return; }
+    $('ls').innerHTML = '<option value="">— New learner —</option>' + d.learners.map(l => `<option value="${esc(l.LRN)}">${esc(l.Name)} (${esc(l.Section)})</option>`).join('');
+    $('tm').textContent = d.learners.length + ' learner(s) loaded.'; $('ed').classList.remove('hide'); buildForms(); fillLearner({ Grade: 7, SchoolYear: '2026–2027', Sex: 'Female' });
+  } catch (e) { $('tm').className = 'msg err'; $('tm').textContent = 'Could not connect. Check the API URL.'; }
+}
+async function loadL(lrn) {
+  if (!lrn) { buildForms(); fillLearner({ Grade: 7, SchoolYear: '2026–2027', Sex: 'Female' }); return; }
+  const d = await api({ action: 'load', key: $('tk').value, lrn });
+  if (!d.ok) { $('tm').textContent = d.error; return; }
+  buildForms(d); fillLearner(d.learner);
+}
+function collect() {
+  const L = {}; ['LRN', 'Name', 'Age', 'Sex', 'Section', 'Grade', 'SchoolYear', 'Code', 'Adviser', 'Principal', 'C1', 'C2', 'C3'].forEach(k => L[k] = $('f_' + k).value.trim());
+  const days = { cd: [], pr: [], ab: [] };
+  document.querySelectorAll('[data-a]').forEach(el => days[el.dataset.a][+el.dataset.i] = el.value);
+  L.Days = JSON.stringify(days);
+  const grades = INPUT_SUBJ.map((s, i) => { const g = { Subject: s }; [1, 2, 3].forEach(t => g['T' + t] = document.querySelector(`[data-g="${i}"][data-t="${t}"]`).value); return g; });
+  return { learner: L, grades };
+}
+async function save() {
+  const d = collect();
+  if (!d.learner.LRN || !d.learner.Name || !d.learner.Code) { $('sm').className = 'msg err'; $('sm').textContent = 'LRN, Name and Access Code are required.'; return; }
+  $('sm').className = 'msg'; $('sm').textContent = 'Saving…';
+  const r = await post({ action: 'save', key: $('tk').value, ...d });
+  $('sm').className = r.ok ? 'msg' : 'msg err'; $('sm').textContent = r.ok ? 'Saved ✔' : r.error;
+  if (r.ok) listL();
+}
+async function del() {
+  const lrn = $('f_LRN').value.trim();
+  if (!lrn || !confirm('Delete learner ' + lrn + '?')) return;
+  const r = await post({ action: 'delete', key: $('tk').value, lrn });
+  $('sm').textContent = r.ok ? 'Deleted.' : r.error; if (r.ok) listL();
+}
+function preview() { show(collect()); }
+</script>
+</body>
+</html>
